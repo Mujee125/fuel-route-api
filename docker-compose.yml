@@ -1,0 +1,27 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: fuel
+      POSTGRES_USER: fuel
+      POSTGRES_PASSWORD: fuel
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fuel"]
+      interval: 3s
+      retries: 20
+  redis:
+    image: redis:7-alpine
+  web:
+    build: .
+    env_file: .env
+    volumes: [".:/app"]
+    environment:
+      POSTGRES_HOST: db
+      REDIS_URL: redis://redis:6379/1
+    ports: ["8000:8000"]
+    depends_on:
+      db: {condition: service_healthy}
+      redis: {condition: service_started}
+volumes:
+  pgdata:
