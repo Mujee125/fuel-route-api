@@ -170,6 +170,8 @@ else:
 
 ROUTE_CACHE_TTL = 60 * 60 * 24          # D8: 24h
 
+ROUTING_TIMEOUT = 20   # seconds per provider call
+
 # External providers (D6)
 ORS_API_KEY = env("ORS_API_KEY", "")
 OSRM_BASE_URL = env("OSRM_BASE_URL", "https://router.project-osrm.org")
