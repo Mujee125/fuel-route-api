@@ -190,3 +190,6 @@ GEOCODER_FALLBACK = env("GEOCODER_FALLBACK", "1") == "1"
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 GEOCODER_USER_AGENT = "spotter-fuel-route-assessment/1.0 (candidate project)"
 TOTAL_EXTERNAL_CALL_BUDGET = 3
+
+# D4: corridor widening levels (miles from the route line)
+CORRIDOR_LEVELS_MILES = (5, 10, 25)
