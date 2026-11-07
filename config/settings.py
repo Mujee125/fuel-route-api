@@ -174,6 +174,8 @@ ROUTING_TIMEOUT = 20   # seconds per provider call
 
 # External providers (D6)
 ORS_API_KEY = env("ORS_API_KEY", "")
+VEHICLE_TYPE = "truck"
+ORS_PROFILE = env("ORS_PROFILE", "driving-hgv")  # heavy goods vehicle routing
 OSRM_BASE_URL = env("OSRM_BASE_URL", "https://router.project-osrm.org")
 
 # Vehicle rules (hard constraints R-0x)

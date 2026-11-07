@@ -4,7 +4,8 @@ import requests
 from django.conf import settings
 
 METERS_PER_MILE = 1609.344
-ORS_URL = "https://api.openrouteservice.org/v2/directions/driving-car/geojson"
+ORS_URL = f"https://api.openrouteservice.org/v2/directions/{settings.ORS_PROFILE}/geojson"
+
 
 
 class RoutingError(Exception):
