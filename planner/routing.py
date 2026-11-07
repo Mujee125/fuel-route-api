@@ -87,13 +87,14 @@ def _osrm(start, finish):
         raise ProviderError("Unexpected OSRM response")
 
 
-def get_route(start, finish):
+def get_route(start, finish, max_calls=2):
     """One ORS call; OSRM only if ORS fails (never more than 2 calls). start/finish = (lat, lng)."""
     calls = 0
     providers = []
     if settings.ORS_API_KEY:
         providers.append(("ors", _ors))
     providers.append(("osrm", _osrm))
+    providers = providers[:max_calls]
 
     for name, fn in providers:
         calls += 1

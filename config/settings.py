@@ -184,3 +184,9 @@ REST_FRAMEWORK = {
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
     "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],
 }
+
+# US-06: fallback geocoder (only used when a location can't be resolved locally)
+GEOCODER_FALLBACK = env("GEOCODER_FALLBACK", "1") == "1"
+NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
+GEOCODER_USER_AGENT = "spotter-fuel-route-assessment/1.0 (candidate project)"
+TOTAL_EXTERNAL_CALL_BUDGET = 3
