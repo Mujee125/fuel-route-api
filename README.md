@@ -218,7 +218,7 @@ Plans are cached in Redis (db 1) for 24 hours (`ROUTE_CACHE_TTL`, default 86400)
 - A cache hit makes **0 external calls** (`meta.cache_hit: true`). `include_initial_tank_cost` has its own entry.
 - Errors (no route, provider failures) are never cached.
 - An entry is about 90 KB (geometry is thinned).
-- Measured locally: a miss costs the local work (0.2-0.4 s) plus one provider call, which is network-bound (see Performance) for LA->NY (one ORS truck-routing call, which dominates), and a hit takes about 3 ms server-side. The first request on a freshly booted worker can take 100-300 ms.
+- Measured locally: a miss costs the local work (0.2-0.4 s) plus one provider call, which is network-bound and dominates the time (LA→NY: one ORS call, see Performance). A hit takes about 3 ms server-side. The first request on a freshly booted worker can take 100-300 ms.
 - **Redis failure:** requests still succeed. After the first failed Redis call, a worker skips the cache for 30 s (`CACHE_BREAKER_SECONDS`). When Redis is stopped, the first call per worker costs about 4 s because the `redis` hostname no longer resolves.
 - Without `REDIS_URL` the app falls back to an in-process locmem cache. That cache is per process, so each gunicorn worker has its own.
 - Clear the cache: `docker compose exec redis redis-cli -n 1 flushdb`.
