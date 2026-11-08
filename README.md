@@ -105,7 +105,7 @@ Settings are read from environment variables (`.env`, which is gitignored). Only
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `ORS_API_KEY` | (empty) | OpenRouteService key. If it is missing or rejected, the OSRM fallback is used (car profile, labelled in the response). A rejected key costs 2 external calls (ORS, then OSRM) |
+| `ORS_API_KEY` | (empty) | OpenRouteService key. If it is missing, ORS is skipped and OSRM is used (1 external call). If it is rejected, ORS is tried first and then OSRM (2 calls). Either way the route uses the car profile and is labelled in `meta.routing_profile` |
 | `ORS_PROFILE` | `driving-hgv` | ORS routing profile |
 | `OSRM_BASE_URL` | `https://router.project-osrm.org` | Fallback router |
 | `GEOCODER_FALLBACK` | `1` | Allow one Nominatim call for free-text locations |
@@ -249,7 +249,7 @@ GitHub Actions (`.github/workflows/ci.yml`) runs the same suite against a Postgr
 | Location parser | `test_locations.py` (15 tests) |
 | Start equals finish | `test_start_equals_finish_makes_no_routing_call` |
 | Non-USA 400 / unknown 404, no routing call wasted | `test_non_usa_*`, `test_unresolvable_location_is_404_and_never_routes` |
-| Repeat request is a cache hit, Redis down | `test_cache.py`, `test_cache_breaker.py` |
+| Repeat request is a cache hit, Redis down, fallback results cached briefly | `test_cache.py`, `test_cache_breaker.py` |
 | Provider down 502/504, no key leak | `test_provider_error_is_502_with_call_count`, `test_both_timeout_gives_504_with_call_count`, `test_error_messages_never_contain_the_key` |
 | Polyline decoder, total routing deadline | `test_polyline.py`, `test_total_deadline_stops_a_slow_trickle` |
 
