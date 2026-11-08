@@ -3,12 +3,12 @@
 Django REST API that takes a start and finish location in the USA and returns the driving route,
 the cheapest fuel stops along it, and the total fuel cost.
 
-- **Vehicle:** 500-mile maximum range, 10 miles per gallon
+- **Vehicle:** a truck with a 500-mile maximum range and 10 miles per gallon (routed with the `driving-hgv` profile)
 - **Prices:** only the supplied CSV (`data/fuel-prices.csv`)
 - **External calls:** at most 3 per request (geocoding included), reported in `meta.external_api_calls`
 
 ## Stack
-Django X.Y.Z (pinned in `requirements.txt`), Django REST Framework, PostgreSQL 16, Redis 7,
+Django 6.1.3 (pinned in `requirements.txt`), Django REST Framework, PostgreSQL 16, Redis 7,
 gunicorn, Docker Compose. Routing: OpenRouteService (primary), public OSRM (fallback).
 
 ## Quick start
@@ -156,7 +156,7 @@ Additional assumptions:
   at the 5-mile corridor).
 - **Mile markers** are scaled so the final marker equals the routing provider's total distance.
 - **Many small stops:** because the optimiser buys only what it needs and waits for cheaper stations,
-  long trips have many small purchases (LA to NY: 13 stops, $680.42). This is cost-optimal, not a bug.
+  long trips have many small purchases (LA to NY: 13 stops, $676.50). This is cost-optimal, not a bug.
 - **Free-text addresses** cost one Nominatim call, which is fine within the 3-call budget.
 
 **Example: Los Angeles, CA -> New York, NY (truck / `driving-hgv`)**: 2,794 mi, 279.4 gal needed, 13 fuel stops, **$676.50**, 1 external call. No California stops (sparse CA data plus higher CA prices make the optimiser buy in AZ/NM/TX/OK/MO/IL/OH). Longest leg between fuel points: 472 mi.
