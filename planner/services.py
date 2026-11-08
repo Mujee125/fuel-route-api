@@ -31,9 +31,12 @@ def _cache_get(key):
         return None
 
 
-def _cache_set(key, value):
+FALLBACK_CACHE_TTL = 300  # seconds; degraded (non-ORS) results should not live for 24 h
+
+
+def _cache_set(key, value, ttl=None):
     try:
-        cache.set(key, value, settings.ROUTE_CACHE_TTL)
+        cache.set(key, value, settings.ROUTE_CACHE_TTL if ttl is None else ttl)
     except Exception:
         logger.warning("cache set failed", exc_info=True)
 
@@ -218,7 +221,10 @@ def plan_route(start: str, finish: str, include_initial_tank_cost: bool = False)
         return _from_cache(cached, start, finish, flag, calls=geocode_calls)
 
     # 4) Miss: compute, then store (errors raise above and are never cached).
+
     payload = _compute(start, finish, loc_a, loc_b, geocode_calls, flag)
-    _cache_set(plan_key, payload)
-    _cache_set(alias, plan_key)
+    # Only ORS (truck profile) results get the full TTL; a fallback result is cached briefly.
+    ttl = None if payload["meta"].get("routing_provider") == "ors" else FALLBACK_CACHE_TTL
+    _cache_set(plan_key, payload, ttl)
+    _cache_set(alias, plan_key, ttl)
     return payload

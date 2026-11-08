@@ -5,6 +5,9 @@ from django.core.cache import cache
 from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
+from planner import services
+from planner.services import FALLBACK_CACHE_TTL
+
 from planner.routing import ProviderError
 from planner.tests.helpers import LOCMEM_CACHES
 
@@ -99,3 +102,34 @@ class RoutePlanCacheTests(TestCase):
         r = self.client.get("/api/route-plan/map/", {"start": "Dallas, TX", "finish": "Houston, TX"})
         self.assertEqual(r.status_code, 200)
         self.assertEqual(self.route.call_count, 1)
+
+    
+
+OSRM_ROUTE = NS(**{**vars(ROUTE), "provider": "osrm"})
+
+@override_settings(CACHES=LOCMEM_CACHES)
+class FallbackCacheTtlTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.client = APIClient()
+        p_resolve = patch("planner.services.resolve_pair", return_value=(DALLAS, HOUSTON, 0))
+        p_route = patch("planner.services.get_route", return_value=ROUTE)
+        p_resolve.start()
+        self.route = p_route.start()
+        self.addCleanup(p_resolve.stop)
+        self.addCleanup(p_route.stop)
+
+    def ttls_used(self):
+        with patch("planner.services._cache_set", wraps=services._cache_set) as spy:
+            resp = self.client.post(URL, {"start": "Dallas, TX", "finish": "Houston, TX"}, format="json")
+        self.assertEqual(resp.status_code, 200)
+        return [c.args[2] if len(c.args) > 2 else None for c in spy.call_args_list]
+
+    def test_ors_result_uses_the_default_ttl(self):
+        self.assertEqual(set(self.ttls_used()), {None})
+
+    def test_fallback_result_is_cached_briefly(self):
+        self.route.return_value = OSRM_ROUTE
+        ttls = self.ttls_used()
+        self.assertEqual(len(ttls), 2)  # plan key and alias key
+        self.assertEqual(set(ttls), {FALLBACK_CACHE_TTL})    
