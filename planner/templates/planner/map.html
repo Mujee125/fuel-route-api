@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Truck fuel route: {{ start_label }} to {{ finish_label }}</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    html, body, #map { height: 100%; margin: 0; }
+    #panel { position: absolute; z-index: 1000; top: 10px; right: 10px; background: #fff;
+             padding: 8px 12px; border-radius: 6px; font: 14px system-ui, sans-serif;
+             box-shadow: 0 1px 6px rgba(0,0,0,.3); }
+    .stop { background: #f59e0b; color: #111; border: 2px solid #fff; border-radius: 50%;
+            width: 26px; height: 26px; line-height: 22px; text-align: center;
+            font: bold 13px system-ui; box-shadow: 0 1px 4px rgba(0,0,0,.5); }
+  </style>
+</head>
+<body>
+  <div id="panel">
+    <b>{{ start_label }} &rarr; {{ finish_label }}</b><br>
+    {{ distance }} mi &middot; {{ stops }} fuel stop{{ stops|pluralize }} &middot; ${{ total|floatformat:2 }}<br>
+    External API calls: {{ calls }}<br>
+    Routing profile: {{ profile|default:"n/a" }}
+  </div>
+  <div id="map"></div>
+  {{ geojson|json_script:"route-geojson" }}
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const fc = JSON.parse(document.getElementById("route-geojson").textContent);
+    const map = L.map("map");
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+      { maxZoom: 19, referrerPolicy: "strict-origin-when-cross-origin", attribution: "&copy; OpenStreetMap contributors" }).addTo(map);
+
+    // Popups use text nodes only, so CSV station names cannot inject HTML.
+    function popup(lines) {
+      const div = document.createElement("div");
+      lines.forEach((t, i) => {
+        if (i) div.appendChild(document.createElement("br"));
+        div.appendChild(document.createTextNode(t));
+      });
+      return div;
+    }
+
+    const layer = L.geoJSON(fc, {
+      style: f => (f.geometry.type === "LineString" ? { color: "#2563eb", weight: 4 } : {}),
+      pointToLayer: (f, ll) => {
+        const p = f.properties;
+        if (p.kind === "stop") {
+          return L.marker(ll, { icon: L.divIcon({ className: "", iconSize: [26, 26],
+            html: '<div class="stop">' + Number(p.order) + "</div>" }) });
+        }
+        return L.circleMarker(ll, { radius: 9, color: "#fff", weight: 2, fillOpacity: 1,
+          fillColor: p.kind === "start" ? "#16a34a" : "#dc2626" });
+      },
+      onEachFeature: (f, l) => {
+        const p = f.properties;
+        if (p.kind === "stop") {
+          l.bindPopup(popup([
+            "#" + p.order + " " + p.name,
+            p.city + ", " + p.state + " (mile " + p.mile_marker + ")",
+            "Price: $" + p.price_per_gallon.toFixed(3) + "/gal",
+            "Buy: " + p.gallons_purchased.toFixed(3) + " gal",
+            "Cost: $" + p.cost.toFixed(2),
+          ]));
+        } else if (p.kind === "start" || p.kind === "finish") {
+          l.bindPopup(popup([p.kind.toUpperCase() + ": " + p.label]));
+        }
+      },
+    }).addTo(map);
+    map.fitBounds(layer.getBounds().pad(0.05));
+  </script>
+</body>
+</html>

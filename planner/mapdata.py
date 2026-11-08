@@ -1,7 +1,7 @@
 """GeoJSON + geometry thinning for the response/map (D10)."""
 
 
-def thin_coordinates(coords, min_step_deg=0.004, ndigits=5):
+def thin_coordinates(coords, min_step_deg=0.01, ndigits=5):
     """Drop points closer than ~0.3 mi to the last kept point (display only)."""
     pts = [(c[0], c[1]) for c in coords]
     if len(pts) <= 2:

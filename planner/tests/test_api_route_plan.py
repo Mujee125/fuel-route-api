@@ -27,7 +27,9 @@ class RoutePlanApiTests(TestCase):
         self.assertEqual(body["fuel_stops"], [])
         self.assertEqual(body["summary"]["total_gallons_needed"], 23.9)
         self.assertEqual(body["summary"]["total_fuel_cost"], 0.0)
+        self.assertEqual(body["summary"]["vehicle_type"], "truck")
         self.assertEqual(body["meta"]["external_api_calls"], 1)
+        self.assertEqual(body["meta"]["routing_profile"], "driving-hgv")
         self.assertIn("processing_ms", body["meta"])
         kinds = [f["properties"]["kind"] for f in body["map"]["geojson"]["features"]]
         self.assertEqual(kinds, ["route", "start", "finish"])
@@ -69,6 +71,16 @@ class RoutePlanApiTests(TestCase):
         self.assertEqual(r.status_code, 502)
         self.assertEqual(r.json()["error"]["code"], "routing_provider_error")
         self.assertEqual(r.json()["meta"]["external_api_calls"], 1)
+
+    @patch("planner.services.resolve_pair", return_value=(DALLAS, HOUSTON, 0))
+    def test_osrm_fallback_is_labelled_as_car_profile(self, _resolve):
+        osrm = NS(coordinates=ROUTE.coordinates, distance_miles=239.0,
+                  duration_minutes=225.0, provider="osrm", external_calls=2)
+        with patch("planner.services.get_route", return_value=osrm):
+            r = self.client.post(URL, {"start": "a", "finish": "b"}, format="json")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("car", r.json()["meta"]["routing_profile"])
+        self.assertEqual(r.json()["meta"]["external_api_calls"], 2)
 
     @patch("planner.services.get_route", return_value=ROUTE)
     @patch("planner.services.resolve_pair", return_value=(DALLAS, HOUSTON, 0))
