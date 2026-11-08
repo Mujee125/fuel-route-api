@@ -208,7 +208,7 @@ A cache miss therefore takes roughly 0.2-0.4 s of local work plus whatever the p
 
 ## Cache
 
-Plans are cached in Redis (db 1) for 24 hours (`ROUTE_CACHE_TTL`, default 86400).
+Plans are cached in Redis (db 1) for 24 hours (`ROUTE_CACHE_TTL`, default 86400). Results from the OSRM fallback (car profile) are cached for only 5 minutes (`FALLBACK_CACHE_TTL` in `planner/services.py`), so fixing a bad `ORS_API_KEY` takes effect quickly. Without an ORS key, every result is a fallback result and gets this short TTL.
 
 | Key | Purpose |
 |---|---|
@@ -225,7 +225,7 @@ Plans are cached in Redis (db 1) for 24 hours (`ROUTE_CACHE_TTL`, default 86400)
 - Redis has no `maxmemory` limit by default. In production set `maxmemory` with `maxmemory-policy allkeys-lru`.
 ## Tests
 
-76 tests (Django test runner). They run against PostgreSQL and use local-memory caches, so no Redis or
+78 tests (Django test runner). They run against PostgreSQL and use local-memory caches, so no Redis or
 network is needed. All routing and geocoding HTTP is mocked.
 
 ```
