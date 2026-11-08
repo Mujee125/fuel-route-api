@@ -14,11 +14,12 @@ gunicorn, Docker Compose. Routing: OpenRouteService (primary), public OSRM (fall
 ## Quick start
 ```bash
 cp .env.example .env              # add your free ORS_API_KEY (openrouteservice.org)
-docker compose up --build
+docker compose up --build -d      # migrations are applied on start
 docker compose exec web python manage.py load_fuel_stations
 docker compose exec web python manage.py geocode_stations
 curl localhost:8000/api/health/
 ```
+On Windows PowerShell use `copy .env.example .env` and `curl.exe`. Without `ORS_API_KEY` the app falls back to OSRM (car profile only).
 `data/us_places.csv` (offline gazetteer) is committed, so geocoding needs no network.
 To rebuild it: `python manage.py build_gazetteer`.
 
@@ -83,12 +84,14 @@ Start equal to finish returns 200 with distance 0, no stops, cost 0 and no exter
 4. **Corridor:** 5 miles around the route, widening to 10 then 25 miles if no feasible plan exists,
    otherwise 422.
 5. **Optimiser (greedy lookahead):**
-   - Start with a full tank (the initial fuel is free).
+   - Start with a full tank (the initial fuel is not charged unless `include_initial_tank_cost=true`).
    - At each station, if a cheaper station (or the destination) is within a full tank, buy only enough
      to reach it.
    - Otherwise fill up and drive to the cheapest station in range.
    - The 500-mile range is a hard cap. Stations where nothing is bought are not listed as stops.
-6. **Cache:** two-level Redis cache with a 24 h TTL and a locmem fallback; see [Cache](#cache).
+   - This is the classic gas-station problem. With partial fills, buying only enough to reach the next cheaper station (or filling up when none is in range) gives the lowest cost among the stations in the corridor.
+6. **Cache:** two-level Redis cache (alias key and plan key) with a 24 h TTL. If Redis is down, a circuit
+   breaker skips it for 30 s and requests are computed normally; see [Cache](#cache).
 
 ## Configuration
 
@@ -111,7 +114,7 @@ Decisions D1-D10 from the brief, as implemented:
 
 | ID | Topic | Decision |
 |---|---|---|
-| D1 | Initial tank | The truck starts with a full 500-mile tank, which is not charged. `total_gallons_needed` = miles / 10 is always returned. With `include_initial_tank_cost=true`, the fuel burned from the starting tank (gallons needed minus gallons bought en route) is also charged, if a price is available (Dallas to Houston: $0 becomes $65.79). |
+| D1 | Initial tank | The truck starts with a full 500-mile tank, which is not charged. `total_gallons_needed` = miles / 10 is always returned. With `include_initial_tank_cost=true`, the fuel burned from the starting tank (gallons needed minus gallons bought en route) is also charged, at the first stop's price or, if there are no stops, the cheapest corridor station within the first 500 miles. If neither exists, nothing is charged (Dallas to Houston: $0 becomes $65.79). |
 | D2 | Fuel purchases | Partial fills: buy only what is needed to reach a cheaper station or the destination. 500 miles is a hard cap between fuel points. Because of this, many small stops can be cost-optimal (LA to NY makes 13). |
 | D3 | Station coordinates | Offline: each station is placed at its City+State centroid from a local gazetteer. The geocoded data is committed, so there are zero external calls at request time. About 2.2% of stations have no match and are excluded. |
 | D4 | Corridor | Stations within 5 miles of the route. If a gap exceeds the range, widen to 10 and then 25 miles, else return 422. |
