@@ -19,7 +19,8 @@ docker compose exec web python manage.py load_fuel_stations
 docker compose exec web python manage.py geocode_stations
 curl localhost:8000/api/health/
 ```
-On Windows PowerShell use `copy .env.example .env` and `curl.exe`. Without `ORS_API_KEY` the app falls back to OSRM (car profile only).
+On Windows PowerShell use `copy .env.example .env` and `curl.exe`. If `ORS_API_KEY` is missing or rejected, the app falls back to the public OSRM router (car profile only). The response labels this in `meta.routing_profile`.
+
 `data/us_places.csv` (offline gazetteer) is committed, so geocoding needs no network.
 To rebuild it: `python manage.py build_gazetteer`.
 
@@ -99,7 +100,7 @@ Settings are read from environment variables (`.env`, which is gitignored). Only
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `ORS_API_KEY` | (empty) | OpenRouteService key. Without it the OSRM fallback is used |
+| `ORS_API_KEY` | (empty) | OpenRouteService key. If it is missing or rejected, the OSRM fallback is used (car profile, labelled in the response). A rejected key costs 2 external calls (ORS, then OSRM) |
 | `ORS_PROFILE` | `driving-hgv` | ORS routing profile |
 | `OSRM_BASE_URL` | `https://router.project-osrm.org` | Fallback router |
 | `GEOCODER_FALLBACK` | `1` | Allow one Nominatim call for free-text locations |
