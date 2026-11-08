@@ -181,6 +181,8 @@ Measured inside the container (Python 3.12, 3 gunicorn sync workers), cache bypa
 | Atlanta, GA → Chicago, IL | 721 | 2 | 108-118 ms |
 | Los Angeles, CA → New York, NY | 2794 | 13 | 181-223 ms |
 
+Atlanta to Chicago (721 mi) needs at least one stop, because the range is 500 miles. The optimiser returns 2 because partial fills (D2) can make a second, smaller purchase cheaper than one large fill. I have not inspected the individual stations for this route.
+
 Local work stays under the 300 ms target. For the coast-to-coast route the phases are: corridor query 62-131 ms,
 geometry 101-135 ms, optimiser ~1 ms, cost ~0 ms, response and GeoJSON assembly 12-75 ms. The first request on a
 fresh worker used to spend ~1.9 s lazily loading the gazetteer; it is now loaded at worker boot (`config/wsgi.py`).
@@ -196,8 +198,7 @@ download of a 446 KB response took 10-60 s. HGV and car profiles perform the sam
 - Gunicorn `timeout = 180` (`gunicorn.conf.py`) so a slow provider cannot get a worker killed.
 - Results are cached for 24 h (see Cache), so only the first request for a route pays the provider cost.
 
-A cache miss therefore takes roughly 0.2-0.4 s of local work plus whatever the provider needs (about 6 s for LA→NY on
-the last measurement; much slower on a poor connection). A cache hit is served in a few ms server-side.
+A cache miss therefore takes roughly 0.2-0.4 s of local work plus whatever the provider needs (about 2-6 s for LA→NY on my connection; much slower on a poor one). A cache hit is served in a few ms server-side.
 
 ## Cache
 
