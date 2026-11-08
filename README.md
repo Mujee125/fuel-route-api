@@ -74,9 +74,23 @@ Status codes: 400 bad input or outside the lower 48, 404 unresolvable location,
   long trips have many small purchases (LA to NY: 13 stops, $680.42). This is cost-optimal, not a bug.
 - **Free-text addresses** cost one Nominatim call, which is fine within the 3-call budget.
 
-## Example result: Los Angeles to New York
-Route about 2,790 miles, 1 external call. 13 fuel stops, 230.685 gallons purchased of 280.685 needed
-(the first 50 gallons are the free initial tank), total $680.42, with no California stops.
+**Example: Los Angeles, CA -> New York, NY (truck / `driving-hgv`)**: 2,794 mi, 279.4 gal needed, 13 fuel stops, **$676.50**, 1 external call. No California stops (sparse CA data plus higher CA prices make the optimiser buy in AZ/NM/TX/OK/MO/IL/OH). Longest leg between fuel points: 472 mi.
+
+| # | Stop | Mile | $/gal |
+|---|---|---|---|
+| 1 | Williams, AZ | 444.0 | 3.219 |
+| 2 | Holbrook, AZ | 566.5 | 3.139 |
+| 3 | Gallup, NM | 661.2 | 3.119 |
+| 4 | Moriarty, NM | 835.9 | 3.116 |
+| 5 | Santa Rosa, NM | 914.4 | 2.879 |
+| 6 | Amarillo, TX | 1082.9 | 2.846 |
+| 7 | Oklahoma City, OK | 1335.8 | 2.879 |
+| 8 | Joplin, MO | 1553.4 | 2.899 |
+| 9 | Springfield, MO | 1624.1 | 2.899 |
+| 10 | Saint Louis, MO | 1833.0 | 2.899 |
+| 11 | Effingham, IL | 1935.3 | 2.999 |
+| 12 | London, OH | 2227.9 | 2.999 |
+| 13 | New Concord, OH | 2321.8 | 3.059 |
 
 ## Tests (TODO: update after US-14)
 ```bash

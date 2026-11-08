@@ -174,6 +174,7 @@ ROUTING_TIMEOUT = 20   # seconds per provider call
 
 # External providers (D6)
 ORS_API_KEY = env("ORS_API_KEY", "")
+ROUTE_CACHE_TTL = int(env("ROUTE_CACHE_TTL", "86400"))  # 24h (D8): prices come from a static CSV
 VEHICLE_TYPE = "truck"
 ORS_PROFILE = env("ORS_PROFILE", "driving-hgv")  # heavy goods vehicle routing
 OSRM_BASE_URL = env("OSRM_BASE_URL", "https://router.project-osrm.org")

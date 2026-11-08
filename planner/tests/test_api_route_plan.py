@@ -4,6 +4,10 @@ from unittest.mock import patch
 from django.test import TestCase
 from rest_framework.test import APIClient
 
+from django.core.cache import cache
+from django.test import override_settings
+from planner.tests.helpers import LOCMEM_CACHES
+
 from planner.routing import ProviderError
 
 URL = "/api/route-plan/"
@@ -13,8 +17,10 @@ ROUTE = NS(coordinates=[[-96.797, 32.7767], [-95.3698, 29.7604]], distance_miles
         duration_minutes=225.0, provider="ors", external_calls=1)
 
 
+@override_settings(CACHES=LOCMEM_CACHES)
 class RoutePlanApiTests(TestCase):
     def setUp(self):
+        cache.clear()
         self.client = APIClient()
 
     @patch("planner.services.get_route", return_value=ROUTE)
