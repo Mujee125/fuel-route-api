@@ -159,16 +159,25 @@ DATABASES = {
 # D8: Redis if configured, otherwise local-memory fallback
 REDIS_URL = env("REDIS_URL", "")
 if REDIS_URL:
-    CACHES = {"default": {
-        "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": REDIS_URL,
-        "OPTIONS": {"CLIENT_CLASS": "django_redis.client.DefaultClient",
-                    "IGNORE_EXCEPTIONS": True},   # Redis down => cache miss, not a 500
-    }}
+        CACHES = {
+        "default": {
+            "BACKEND": "planner.cache_backend.BreakerRedisCache",
+            "LOCATION": REDIS_URL,
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+                "SOCKET_CONNECT_TIMEOUT": 1,
+                "SOCKET_TIMEOUT": 5,
+            },
+        }
+    }
 else:
-    CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        }
+    }
 
-ROUTE_CACHE_TTL = 60 * 60 * 24          # D8: 24h
+
 
 ROUTING_TIMEOUT = 20   # seconds per provider call
 

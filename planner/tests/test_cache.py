@@ -83,12 +83,16 @@ class RoutePlanCacheTests(TestCase):
         self.assertFalse(r.json()["meta"]["cache_hit"])
 
     def test_cache_backend_failure_does_not_break_requests(self):
-        with patch("planner.services.cache") as broken:
+        with patch("planner.services.cache") as broken, \
+            self.assertLogs("planner.services", level="WARNING") as logs:
             broken.get.side_effect = ConnectionError("redis down")
             broken.set.side_effect = ConnectionError("redis down")
             r = self.post()
         self.assertEqual(r.status_code, 200)
         self.assertFalse(r.json()["meta"]["cache_hit"])
+        text = "\n".join(logs.output)
+        self.assertIn("cache get failed", text)
+        self.assertIn("cache set failed", text)
 
     def test_map_page_uses_the_same_cache(self):
         self.post()

@@ -8,7 +8,7 @@ the cheapest fuel stops along it, and the total fuel cost.
 - **External calls:** at most 3 per request (geocoding included), reported in `meta.external_api_calls`
 
 ## Stack
-Django <VERSION> (pinned in `requirements.txt`), Django REST Framework, PostgreSQL 16, Redis 7,
+Django X.Y.Z (pinned in `requirements.txt`), Django REST Framework, PostgreSQL 16, Redis 7,
 gunicorn, Docker Compose. Routing: OpenRouteService (primary), public OSRM (fallback).
 
 ## Quick start
@@ -45,7 +45,7 @@ Status codes: 400 bad input or outside the lower 48, 404 unresolvable location,
      to reach it.
    - Otherwise fill up and drive to the cheapest station in range.
    - The 500-mile range is a hard cap. Stations where nothing is bought are not listed as stops.
-6. **Cache (TODO):** Redis, key = rounded (3 decimal) start/finish coordinates, TTL 24h.
+6. **Cache:** two-level Redis cache with a 24 h TTL and a locmem fallback; see [Cache](#cache).
 
 ## Assumptions
 - The tank starts full and the initial 50 gallons are not charged (`total_gallons_needed` = miles / 10).
@@ -92,6 +92,23 @@ Status codes: 400 bad input or outside the lower 48, 404 unresolvable location,
 | 12 | London, OH | 2227.9 | 2.999 |
 | 13 | New Concord, OH | 2321.8 | 3.059 |
 
+## Cache
+
+Plans are cached in Redis (db 1) for 24 hours (`ROUTE_CACHE_TTL`, default 86400).
+
+| Key | Purpose |
+|---|---|
+| `routeplan:v1:q:<sha1>` | Alias: normalised start/finish text + flag -> resolved coordinates. A repeated free-text request skips geocoding. |
+| `routeplan:v1:p:<lat,lng\|lat,lng\|flag>` | Full plan, keyed by coordinates rounded to 3 decimals. Different spellings of the same places share one entry. |
+
+- A cache hit makes **0 external calls** (`meta.cache_hit: true`). `include_initial_tank_cost` has its own entry.
+- Errors (no route, provider failures) are never cached.
+- An entry is about 90 KB (geometry is thinned).
+- Measured locally: a miss takes 2.5-8 s for LA->NY (one ORS truck-routing call, which dominates), and a hit takes about 3 ms server-side. The first request on a freshly booted worker can take 100-300 ms.
+- **Redis failure:** requests still succeed. After the first failed Redis call, a worker skips the cache for 30 s (`CACHE_BREAKER_SECONDS`). When Redis is stopped, the first call per worker costs about 4 s because the `redis` hostname no longer resolves.
+- Without `REDIS_URL` the app falls back to an in-process locmem cache. That cache is per process, so each gunicorn worker has its own.
+- Clear the cache: `docker compose exec redis redis-cli -n 1 flushdb`.
+- Redis has no `maxmemory` limit by default. In production set `maxmemory` with `maxmemory-policy allkeys-lru`.
 ## Tests (TODO: update after US-14)
 ```bash
 docker compose exec web python manage.py test
