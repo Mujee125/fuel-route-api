@@ -22,14 +22,57 @@ curl localhost:8000/api/health/
 `data/us_places.csv` (offline gazetteer) is committed, so geocoding needs no network.
 To rebuild it: `python manage.py build_gazetteer`.
 
-## API (TODO: fill in after US-10)
-`POST /api/route-plan/` with `{"start": "Los Angeles, CA", "finish": "New York, NY"}`
-Also `GET /api/route-plan/?start=...&finish=...` and `GET /api/route-plan/map/?start=...&finish=...`.
-Accepted location formats: `"City, ST"` and `"lat,lng"` (resolved locally, 0 external calls).
-Free-text addresses use one Nominatim call.
+## API
 
-Status codes: 400 bad input or outside the lower 48, 404 unresolvable location,
-422 no route or no feasible fuel plan, 502/504 routing provider error or timeout.
+`POST /api/route-plan/` with a JSON body (`GET /api/route-plan/?start=...&finish=...` also works).
+Both locations must be in the lower 48 states. A location can be `"City, ST"`, `"lat,lng"` or free text
+(free text costs one geocoder call).
+
+```json
+{ "start": "Los Angeles, CA", "finish": "New York, NY" }
+```
+
+Optional boolean `include_initial_tank_cost` (default `false`): also charge for the fuel in the starting tank (D1).
+
+Trimmed 200 response (route geometry and most of the stops omitted):
+
+```json
+{
+  "start":  { "query": "Los Angeles, CA", "label": "Los Angeles, CA", "lat": 34.0522, "lng": -118.2437 },
+  "finish": { "query": "New York, NY", "label": "New York, NY", "lat": 40.7128, "lng": -74.006 },
+  "route":  { "distance_miles": 2794.0, "duration_minutes": "...", "geometry": { "type": "LineString", "coordinates": ["..."] } },
+  "fuel_stops": [
+    { "order": 1, "name": "...", "city": "Williams", "state": "AZ", "mile_marker": 444.0,
+      "price_per_gallon": 3.219, "gallons_purchased": "...", "cost": "..." }
+  ],
+  "summary": { "vehicle_type": "truck", "stops_count": 13, "total_gallons_needed": 279.4,
+               "total_fuel_cost": 676.5, "currency": "USD", "initial_tank_assumed_full": true },
+  "map":  { "geojson": { "type": "FeatureCollection", "features": ["..."] },
+            "html_url": "/api/route-plan/map/?start=...&finish=..." },
+  "meta": { "external_api_calls": 1, "cache_hit": false, "routing_provider": "ors",
+            "routing_profile": "driving-hgv", "corridor_miles": 5, "processing_ms": 5840 }
+}
+```
+
+Open `html_url` in a browser for the Leaflet map (route, start, finish and numbered stops with price, gallons and cost popups).
+
+### Errors
+
+Every error uses the same shape, and `meta.external_api_calls` is reported even on errors:
+
+```json
+{ "error": { "code": "invalid_location", "message": "'Toronto, ON' is not in the USA" },
+  "meta": { "external_api_calls": 0, "cache_hit": false, "processing_ms": 343 } }
+```
+
+| Status | When | Example `code` |
+|---|---|---|
+| 400 | Missing or malformed input, or a location outside the USA (no routing call is made) | `invalid_location` |
+| 404 | Location cannot be resolved | `location_not_found` |
+| 422 | No drivable route, or no feasible fuel plan (a station gap over 500 miles even after widening to 25 miles) | `no_feasible_fuel_plan` |
+| 502 / 504 | Routing provider error or timeout. The message never contains the API key | |
+
+Start equal to finish returns 200 with distance 0, no stops, cost 0 and no external calls.
 
 ## How it works
 1. **Data load:** drop Canadian rows, dedupe by OPIS ID (keep the lowest price), flag prices above $5.
@@ -137,10 +180,36 @@ Plans are cached in Redis (db 1) for 24 hours (`ROUTE_CACHE_TTL`, default 86400)
 - Without `REDIS_URL` the app falls back to an in-process locmem cache. That cache is per process, so each gunicorn worker has its own.
 - Clear the cache: `docker compose exec redis redis-cli -n 1 flushdb`.
 - Redis has no `maxmemory` limit by default. In production set `maxmemory` with `maxmemory-policy allkeys-lru`.
-## Tests (TODO: update after US-14)
-```bash
+## Tests
+
+76 tests (Django test runner). They run against PostgreSQL and use local-memory caches, so no Redis or
+network is needed. All routing and geocoding HTTP is mocked.
+
+```
 docker compose exec web python manage.py test
 ```
+
+GitHub Actions (`.github/workflows/ci.yml`) runs the same suite against a Postgres 16 service, plus
+`manage.py check` and `makemigrations --check`.
+
+| Scenario (backlog Sec. 9) | Test |
+|---|---|
+| Short trip, 0 stops, gallons = miles / 10 | `test_short_trip_no_stops`, `test_short_trip_post_matches_contract` |
+| ~700 miles, 1 stop | `test_700_miles_one_stop` |
+| Cheaper station beats nearer one | `test_prefers_cheaper_station_not_nearest`, `test_buys_only_what_is_needed_to_reach_cheaper` |
+| Coast to coast, many stops, no leg over 500 miles | `test_long_trip_many_stops_and_range_cap` |
+| Exactly 500 miles / station at exactly 500 | `test_exactly_500_miles_needs_no_stop`, `test_station_exactly_at_range_limit_is_reachable` |
+| Empty corridor | `test_empty_corridor_is_fine_for_a_short_trip`, `test_empty_corridor_is_422_for_a_long_trip` |
+| Price ties | `test_equal_prices_are_deterministic_and_cost_is_hand_computed` |
+| Gap over range, corridor widening, 422 | `test_gap_over_range_is_infeasible`, `test_widening_*`, `test_no_feasible_fuel_plan_is_422_with_call_count` |
+| Cost at 10 mpg, initial-tank flag | `test_costing.py` (6 tests) |
+| Location parser | `test_locations.py` (15 tests) |
+| Start equals finish | `test_start_equals_finish_makes_no_routing_call` |
+| Non-USA 400 / unknown 404, no routing call wasted | `test_non_usa_*`, `test_unresolvable_location_is_404_and_never_routes` |
+| Repeat request is a cache hit, Redis down | `test_cache.py`, `test_cache_breaker.py` |
+| Provider down 502/504, no key leak | `test_provider_error_is_502_with_call_count`, `test_both_timeout_gives_504_with_call_count`, `test_error_messages_never_contain_the_key` |
+| Polyline decoder, total routing deadline | `test_polyline.py`, `test_total_deadline_stops_a_slow_trickle` |
+
 
 ## Postman (TODO: US-16)
 Collection in `postman/`.
