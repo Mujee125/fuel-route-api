@@ -90,10 +90,43 @@ Start equal to finish returns 200 with distance 0, no stops, cost 0 and no exter
    - The 500-mile range is a hard cap. Stations where nothing is bought are not listed as stops.
 6. **Cache:** two-level Redis cache with a 24 h TTL and a locmem fallback; see [Cache](#cache).
 
+## Configuration
+
+Settings are read from environment variables (`.env`, which is gitignored). Only `ORS_API_KEY` is needed for a normal run. The rest have defaults.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `ORS_API_KEY` | (empty) | OpenRouteService key. Without it the OSRM fallback is used |
+| `ORS_PROFILE` | `driving-hgv` | ORS routing profile |
+| `OSRM_BASE_URL` | `https://router.project-osrm.org` | Fallback router |
+| `GEOCODER_FALLBACK` | `1` | Allow one Nominatim call for free-text locations |
+| `REDIS_URL` | (empty = local-memory cache) | Redis cache |
+| `ROUTE_CACHE_TTL` | `86400` | Cache TTL in seconds |
+| `POSTGRES_DB` / `_USER` / `_PASSWORD` / `_HOST` / `_PORT` | `fuel` / `fuel` / `fuel` / `localhost` / `5432` | Database |
+| `DJANGO_SECRET_KEY`, `DJANGO_DEBUG`, `DJANGO_ALLOWED_HOSTS` | dev key, `0`, `localhost,127.0.0.1` | Django |
+
 ## Assumptions
-- The tank starts full and the initial 50 gallons are not charged (`total_gallons_needed` = miles / 10).
-- Partial fills: only the fuel needed is bought, never more than the tank allows.
-- Money is in USD rounded to cents, price per gallon to 3 decimals, distances in miles.
+
+Decisions D1-D10 from the brief, as implemented:
+
+| ID | Topic | Decision |
+|---|---|---|
+| D1 | Initial tank | The truck starts with a full 500-mile tank, which is not charged. `total_gallons_needed` = miles / 10 is always returned. With `include_initial_tank_cost=true`, the fuel burned from the starting tank (gallons needed minus gallons bought en route) is also charged, if a price is available (Dallas to Houston: $0 becomes $65.79). |
+| D2 | Fuel purchases | Partial fills: buy only what is needed to reach a cheaper station or the destination. 500 miles is a hard cap between fuel points. Because of this, many small stops can be cost-optimal (LA to NY makes 13). |
+| D3 | Station coordinates | Offline: each station is placed at its City+State centroid from a local gazetteer. The geocoded data is committed, so there are zero external calls at request time. About 2.2% of stations have no match and are excluded. |
+| D4 | Corridor | Stations within 5 miles of the route. If a gap exceeds the range, widen to 10 and then 25 miles, else return 422. |
+| D5 | Duplicates | One row per OPIS ID, keeping the lowest price. Exact duplicates and Canadian rows are dropped. Prices above $5 are flagged (`price_flagged`) but kept. |
+| D6 | Routing | OpenRouteService with the `driving-hgv` profile (changed from `driving-car` because the vehicle is a truck) is primary. Public OSRM is the fallback and is car-only, which the response labels via `meta.routing_profile`. The key comes from `ORS_API_KEY` and is never returned in a response. |
+| D7 | Location input | `"City, ST"` and `"lat,lng"` resolve locally with 0 calls. Free text uses one Nominatim call. At most 3 external calls per request, always reported in `meta.external_api_calls`. |
+| D8 | Cache | Redis, 24 h TTL. The plan key is the start/finish pair with coordinates rounded to 3 decimals, plus an alias key per normalised input text. If Redis is down, a circuit breaker skips it for 30 s and requests are computed normally (see Cache). |
+| D9 | Units and rounding | Miles and gallons. Money is rounded half-up to cents per stop, and the total is the sum of the rounded stop costs. Price per gallon has 3 decimals, `total_gallons_needed` 1 decimal, route distance and `distance_from_route_miles` 2 decimals, mile markers 1 decimal, duration whole minutes, coordinates 5 decimals. |
+| D10 | Map output | GeoJSON FeatureCollection (route, start, finish, numbered stops) in the response, plus a Leaflet page at `html_url`. The route geometry in the response is thinned to keep the payload lean. The distance is the provider's value. |
+
+Additional assumptions:
+
+- **Vehicle:** a diesel truck, 500-mile range, 10 mpg. Routing uses the `driving-hgv` profile with default dimensions, so no weight or height restrictions are sent.
+- **Start equal to finish:** returns 200 with distance 0, no stops, cost 0 and no routing call (not cached).
+- **Prices:** only from the supplied CSV. No other price source exists in the code.
 
 ## Known limitations
 - **Sparse California data:** the CSV has only about 8 California stations, all in the southeast
