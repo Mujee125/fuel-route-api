@@ -247,5 +247,23 @@ GitHub Actions (`.github/workflows/ci.yml`) runs the same suite against a Postgr
 | Polyline decoder, total routing deadline | `test_polyline.py`, `test_total_deadline_stops_a_slow_trickle` |
 
 
-## Postman (TODO: US-16)
-Collection in `postman/`.
+## Postman
+
+The `postman/` folder holds a collection and a local environment:
+
+- `postman/fuel-route-api.postman_collection.json`
+- `postman/local.postman_environment.json` (sets `base_url` to `http://127.0.0.1:8000`)
+
+To use them, start the stack (see Quick start), import both files into Postman, select the environment "Fuel Route API - local", then open the collection and click Run. The collection also has its own default `base_url`, so it works without the environment. Run the requests in order, because request 3 repeats request 1.
+
+| # | Request | Expected |
+|---|---|---|
+| 0 | Health | 200 |
+| 1 | Short trip: Dallas to Houston | 200, about 239 mi, 0 stops, at most 3 external calls |
+| 2 | Long multi-stop: Los Angeles to New York | 200, 2700-2900 mi, at least 5 stops, GeoJSON present |
+| 3 | Cache hit: repeat of request 1 | 200, `cache_hit: true`, 0 external calls |
+| 4 | Error 400: Toronto, ON | 400 `invalid_location`, 0 calls |
+| 5 | Error 404: unresolvable text | 404 `location_not_found` |
+| 6 | Error 422: Seattle to Los Angeles | 422 `no_feasible_fuel_plan` |
+
+All 22 assertions passed in the Postman desktop runner. Request 2 takes a few seconds on a cache miss, because it makes one routing call.
