@@ -47,8 +47,11 @@ Trimmed 200 response (route geometry and most of the stops omitted):
     { "order": 1, "name": "...", "city": "Williams", "state": "AZ", "mile_marker": 444.0,
       "price_per_gallon": 3.219, "gallons_purchased": "...", "cost": "..." }
   ],
-  "summary": { "vehicle_type": "truck", "stops_count": 13, "total_gallons_needed": 279.4,
-               "total_fuel_cost": 676.5, "currency": "USD", "initial_tank_assumed_full": true },
+   "summary": { "vehicle_type": "truck", "vehicle_range_miles": 500, "mpg": 10, "stops_count": 13,
+               "total_gallons_needed": 279.4, "total_fuel_cost": 676.5, "currency": "USD",
+               "initial_tank_assumed_full": true, "initial_tank_gallons": 50.0,
+               "initial_tank_charged": false, "initial_tank_price_per_gallon": null,
+               "initial_tank_cost": 0.0 },
   "map":  { "geojson": { "type": "FeatureCollection", "features": ["..."] },
             "html_url": "/api/route-plan/map/?start=...&finish=..." },
   "meta": { "external_api_calls": 1, "cache_hit": false, "routing_provider": "ors",
