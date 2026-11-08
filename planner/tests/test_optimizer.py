@@ -63,3 +63,41 @@ class OptimizerTests(SimpleTestCase):
         with self.assertRaises(InfeasiblePlan):
             plan_with_widening(SimpleNamespace(total_miles=700))
         self.assertEqual(find.call_count, 3)
+
+class OptimizerBoundaryTests(SimpleTestCase):
+    # --- exact 500 -----------------------------------------------------------
+    def test_exactly_500_miles_needs_no_stop(self):
+        p = plan_fuel_stops([], 500)
+        self.assertEqual((len(p.stops), p.total_cost), (0, Decimal("0.00")))
+        self.assertEqual(p.total_gallons_needed, 50.0)
+
+    def test_station_exactly_at_range_limit_is_reachable(self):
+        p = plan_fuel_stops([S(500, 3.0)], 1000)          # arrive with an empty tank, then 500 more
+        self.assertEqual([s.station.mile_marker for s in p.stops], [500])
+        self.assertEqual((p.stops[0].gallons, p.total_cost), (50.0, Decimal("150.00")))
+
+    def test_just_over_500_without_a_station_is_infeasible(self):
+        with self.assertRaises(InfeasiblePlan) as cm:
+            plan_fuel_stops([], 500.5)
+        self.assertEqual(cm.exception.status_code, 422)
+
+    # --- empty corridor --------------------------------------------------------
+    def test_empty_corridor_is_fine_for_a_short_trip(self):
+        self.assertEqual(len(plan_fuel_stops([], 300).stops), 0)
+
+    def test_empty_corridor_is_422_for_a_long_trip(self):
+        with self.assertRaises(InfeasiblePlan) as cm:
+            plan_fuel_stops([], 700)
+        self.assertEqual(cm.exception.status_code, 422)
+
+    # --- ties ------------------------------------------------------------------
+    def test_equal_prices_are_deterministic_and_cost_is_hand_computed(self):
+        stations = [S(400, 3.0), S(500, 3.0)]
+        a = plan_fuel_stops(stations, 900)
+        b = plan_fuel_stops(list(stations), 900)
+        self.assertEqual([s.station.mile_marker for s in a.stops],
+                         [s.station.mile_marker for s in b.stops])
+        self.assertEqual(a.total_cost, b.total_cost)
+        self.assertEqual(a.total_cost, Decimal("120.00"))      # 90 gal needed - 50 initial = 40 x 3.00
+        marks = [0] + [s.station.mile_marker for s in a.stops] + [900]
+        self.assertLessEqual(max(y - x for x, y in zip(marks, marks[1:])), 500)

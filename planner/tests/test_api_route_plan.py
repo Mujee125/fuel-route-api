@@ -99,3 +99,67 @@ class RoutePlanApiTests(TestCase):
 
     def test_map_page_requires_params(self):
         self.assertEqual(self.client.get("/api/route-plan/map/").status_code, 400)
+
+def _find(obj, key):
+    """Find `key` anywhere in a nested JSON body (error bodies may nest meta)."""
+    if isinstance(obj, dict):
+        if key in obj:
+            return obj[key]
+        for v in obj.values():
+            hit = _find(v, key)
+            if hit is not None:
+                return hit
+    elif isinstance(obj, list):
+        for v in obj:
+            hit = _find(v, key)
+            if hit is not None:
+                return hit
+    return None
+
+
+SEATTLE = NS(label="Seattle, WA", lat=47.6062, lng=-122.3321, source="gazetteer", external_calls=0)
+LOS_ANGELES = NS(label="Los Angeles, CA", lat=34.0522, lng=-118.2437, source="gazetteer", external_calls=0)
+ROUTE_LONG = NS(coordinates=[[-122.3321, 47.6062], [-118.2437, 34.0522]], distance_miles=1135.0,
+                duration_minutes=1000.0, provider="ors", external_calls=1)
+
+
+@override_settings(CACHES=LOCMEM_CACHES)
+class RoutePlanErrorTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.client = APIClient()
+
+    @patch("planner.services.get_route")
+    def test_non_usa_city_is_400_and_never_routes(self, route_mock):
+        r = self.client.post(URL, {"start": "Toronto, ON", "finish": "Dallas, TX"}, format="json")
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("invalid_location", r.content.decode())
+        self.assertEqual(_find(r.json(), "external_api_calls"), 0)
+        route_mock.assert_not_called()
+
+    @patch("planner.services.get_route")
+    def test_non_usa_coordinates_are_400_and_never_route(self, route_mock):
+        r = self.client.post(URL, {"start": "51.5074,-0.1278", "finish": "Dallas, TX"}, format="json")
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(_find(r.json(), "external_api_calls"), 0)
+        route_mock.assert_not_called()
+
+    @patch("planner.services.get_route")
+    @patch("planner.services.resolve_pair")
+    def test_unresolvable_location_is_404_and_never_routes(self, resolve_mock, route_mock):
+        from planner.locations import LocationNotFound
+        resolve_mock.side_effect = LocationNotFound("Could not resolve 'zzzz qqqq'")
+        r = self.client.post(URL, {"start": "zzzz qqqq", "finish": "Dallas, TX"}, format="json")
+        self.assertEqual(r.status_code, 404)
+        self.assertIn("location_not_found", r.content.decode())
+        self.assertIsNotNone(_find(r.json(), "external_api_calls"))
+        route_mock.assert_not_called()
+
+    @patch("planner.optimizer.find_corridor_stations", return_value=[])
+    @patch("planner.services.get_route", return_value=ROUTE_LONG)
+    @patch("planner.services.resolve_pair", return_value=(SEATTLE, LOS_ANGELES, 0))
+    def test_no_feasible_fuel_plan_is_422_with_call_count(self, _resolve, _route, _find_stations):
+        r = self.client.post(URL, {"start": "Seattle, WA", "finish": "Los Angeles, CA"}, format="json")
+        self.assertEqual(r.status_code, 422)
+        self.assertIn("no_feasible_fuel_plan", r.content.decode())
+        self.assertEqual(_find(r.json(), "external_api_calls"), 1)

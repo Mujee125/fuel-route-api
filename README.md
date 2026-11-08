@@ -92,6 +92,34 @@ Status codes: 400 bad input or outside the lower 48, 404 unresolvable location,
 | 12 | London, OH | 2227.9 | 2.999 |
 | 13 | New Concord, OH | 2321.8 | 3.059 |
 
+## Performance
+
+Measured inside the container (Python 3.12, 3 gunicorn sync workers), cache bypassed, three runs per route:
+
+| Route | Miles | Stops | Local work (everything except the ORS call) |
+|---|---|---|---|
+| Dallas, TX → Houston, TX | 239 | 0 | 31-46 ms |
+| Atlanta, GA → Chicago, IL | 721 | 2 | 108-118 ms |
+| Los Angeles, CA → New York, NY | 2794 | 13 | 181-223 ms |
+
+Local work stays under the 300 ms target. For the coast-to-coast route the phases are: corridor query 62-131 ms,
+geometry 101-135 ms, optimiser ~1 ms, cost ~0 ms, response and GeoJSON assembly 12-75 ms. The first request on a
+fresh worker used to spend ~1.9 s lazily loading the gazetteer; it is now loaded at worker boot (`config/wsgi.py`).
+
+**Routing provider time dominates a cache miss.** It is network-bound, not compute-bound: ORS compute (time to first
+byte) was 0.7-3 s, while on my connection (the same connection pulled PyPI at ~15 kB/s) TLS setup took 2-9 s and the
+download of a 446 KB response took 10-60 s. HGV and car profiles perform the same. Mitigations in the code:
+
+- ORS is called on the encoded-polyline endpoint instead of `/geojson`: 73 KB instead of 446 KB for LA→NY
+  (decoding costs about 38 ms). The route result is unchanged (2794 mi, 13 stops, $676.50).
+- A total deadline per provider (`ROUTING_DEADLINE`, default 45 s) is enforced while streaming, because the
+  `requests` timeout is per read and cannot stop a slow trickle. A miss then falls back to OSRM or returns 504.
+- Gunicorn `timeout = 180` (`gunicorn.conf.py`) so a slow provider cannot get a worker killed.
+- Results are cached for 24 h (see Cache), so only the first request for a route pays the provider cost.
+
+A cache miss therefore takes roughly 0.2-0.4 s of local work plus whatever the provider needs (about 6 s for LA→NY on
+the last measurement; much slower on a poor connection). A cache hit is served in a few ms server-side.
+
 ## Cache
 
 Plans are cached in Redis (db 1) for 24 hours (`ROUTE_CACHE_TTL`, default 86400).
@@ -104,7 +132,7 @@ Plans are cached in Redis (db 1) for 24 hours (`ROUTE_CACHE_TTL`, default 86400)
 - A cache hit makes **0 external calls** (`meta.cache_hit: true`). `include_initial_tank_cost` has its own entry.
 - Errors (no route, provider failures) are never cached.
 - An entry is about 90 KB (geometry is thinned).
-- Measured locally: a miss takes 2.5-8 s for LA->NY (one ORS truck-routing call, which dominates), and a hit takes about 3 ms server-side. The first request on a freshly booted worker can take 100-300 ms.
+- Measured locally: a miss costs the local work (0.2-0.4 s) plus one provider call, which is network-bound (see Performance) for LA->NY (one ORS truck-routing call, which dominates), and a hit takes about 3 ms server-side. The first request on a freshly booted worker can take 100-300 ms.
 - **Redis failure:** requests still succeed. After the first failed Redis call, a worker skips the cache for 30 s (`CACHE_BREAKER_SECONDS`). When Redis is stopped, the first call per worker costs about 4 s because the `redis` hostname no longer resolves.
 - Without `REDIS_URL` the app falls back to an in-process locmem cache. That cache is per process, so each gunicorn worker has its own.
 - Clear the cache: `docker compose exec redis redis-cli -n 1 flushdb`.
