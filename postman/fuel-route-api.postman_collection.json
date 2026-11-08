@@ -1,0 +1,216 @@
+
+    {
+    "info": {
+        "name": "Fuel Route API",
+        "description": "Run in order with the Collection Runner. Request 3 repeats request 1, so it must run after it.",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "variable": [{ "key": "base_url", "value": "http://127.0.0.1:8000" }],
+    "item": [
+        {
+        "name": "0 Health",
+        "event": [
+            {
+            "listen": "test",
+            "script": {
+                "type": "text/javascript",
+                "exec": [
+                "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+            }
+            }
+        ],
+        "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/health/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "health", ""]
+            }
+          }
+        },
+        {
+          "name": "1 Short trip - Dallas to Houston",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('distance about 239 mi', () => pm.expect(b.route.distance_miles).to.be.within(230, 250));",
+                  "pm.test('no fuel stops needed', () => pm.expect(b.fuel_stops.length).to.eql(0));",
+                  "pm.test('at most 3 external calls', () => pm.expect(b.meta.external_api_calls).to.be.at.most(3));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"start\": \"Dallas, TX\", \"finish\": \"Houston, TX\"}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/route-plan/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "route-plan", ""]
+            }
+          }
+        },
+        {
+          "name": "2 Long multi-stop - Los Angeles to New York",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('distance 2700-2900 mi', () => pm.expect(b.route.distance_miles).to.be.within(2700, 2900));",
+                  "pm.test('several fuel stops', () => pm.expect(b.fuel_stops.length).to.be.at.least(5));",
+                  "pm.test('at most 3 external calls', () => pm.expect(b.meta.external_api_calls).to.be.at.most(3));",
+                  "pm.test('map GeoJSON present', () => pm.expect(b.map.geojson).to.be.an('object'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"start\": \"Los Angeles, CA\", \"finish\": \"New York, NY\"}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/route-plan/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "route-plan", ""]
+            }
+          }
+        },
+        {
+          "name": "3 Cache hit - repeat of request 1",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('cache hit', () => pm.expect(b.meta.cache_hit).to.eql(true));",
+                  "pm.test('0 external calls', () => pm.expect(b.meta.external_api_calls).to.eql(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"start\": \"Dallas, TX\", \"finish\": \"Houston, TX\"}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/route-plan/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "route-plan", ""]
+            }
+          }
+        },
+        {
+          "name": "4 Error 400 - non-USA (Toronto)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "const b = pm.response.json();",
+                  "pm.test('invalid_location', () => pm.expect(b.error.code).to.eql('invalid_location'));",
+                  "pm.test('meta reports calls', () => pm.expect(b.meta.external_api_calls).to.eql(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"start\": \"Toronto, ON\", \"finish\": \"Chicago, IL\"}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/route-plan/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "route-plan", ""]
+            }
+          }
+        },
+        {
+          "name": "5 Error 404 - unresolved location",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404', () => pm.response.to.have.status(404));",
+                  "const b = pm.response.json();",
+                  "pm.test('location_not_found', () => pm.expect(b.error.code).to.eql('location_not_found'));",
+                  "pm.test('meta reports calls', () => pm.expect(b.meta.external_api_calls).to.be.at.most(3));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"start\": \"asdfghjkl qwertyzz\", \"finish\": \"Chicago, IL\"}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/route-plan/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "route-plan", ""]
+            }
+          }
+        },
+        {
+          "name": "6 Error 422 - no feasible plan (Seattle to Los Angeles)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422', () => pm.response.to.have.status(422));",
+                  "const b = pm.response.json();",
+                  "pm.test('no_feasible_fuel_plan', () => pm.expect(b.error.code).to.eql('no_feasible_fuel_plan'));",
+                  "pm.test('meta reports calls', () => pm.expect(b.meta.external_api_calls).to.be.at.most(3));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"start\": \"Seattle, WA\", \"finish\": \"Los Angeles, CA\"}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/route-plan/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "route-plan", ""]
+            }
+          }
+        }
+      ]
+    }

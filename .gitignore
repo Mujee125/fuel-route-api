@@ -3,3 +3,12 @@ __pycache__/
 *.pyc
 .env
 data/raw/
+# Postman local workspace files (the two JSON exports in postman/ are kept)
+.postman/
+postman/collections/
+postman/environments/
+postman/globals/
+postman/documents/
+postman/flows/
+postman/mocks/
+postman/specs/
