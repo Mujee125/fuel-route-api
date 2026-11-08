@@ -44,8 +44,10 @@ Trimmed 200 response (route geometry and most of the stops omitted):
   "finish": { "query": "New York, NY", "label": "New York, NY", "lat": 40.7128, "lng": -74.006 },
   "route":  { "distance_miles": 2794.0, "duration_minutes": "...", "geometry": { "type": "LineString", "coordinates": ["..."] } },
   "fuel_stops": [
-    { "order": 1, "name": "...", "city": "Williams", "state": "AZ", "mile_marker": 444.0,
-      "price_per_gallon": 3.219, "gallons_purchased": "...", "cost": "..." }
+        { "order": 1, "opis_id": 72044, "name": "Maverik Country Store #709", "address": "I-40 Exit 163",
+      "city": "Williams", "state": "AZ", "lat": 35.24664, "lng": -112.1833, "mile_marker": 444.0,
+      "distance_from_route_miles": 1.01, "price_per_gallon": 3.219, "gallons_purchased": 6.656,
+      "cost": 21.43 }
   ],
    "summary": { "vehicle_type": "truck", "vehicle_range_miles": 500, "mpg": 10, "stops_count": 13,
                "total_gallons_needed": 279.4, "total_fuel_cost": 676.5, "currency": "USD",
